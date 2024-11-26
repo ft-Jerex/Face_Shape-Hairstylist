@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 import threading
+import dlib
 import numpy as np
 import os
 
@@ -12,54 +13,37 @@ class FaceShapeRecognizer:
         self.root.title("Face Shape Recognition")
         self.root.geometry("800x600")
         
-        # Initialize video capture with error handling
+        # Initialize video capture
         self.init_camera()
 
-        # Load the cascade classifier
+        # Load dlib's face detector and shape predictor
         try:
-            cascade_path = r"C:\Users\Jerard\Documents\GitHub\Face_Shape-Hairstylist\tools\haarcascade_frontalface_default.xml"
-            if not os.path.exists(cascade_path):
-                raise FileNotFoundError(f"Cascade file not found at: {cascade_path}")
+            predictor_path = r"tools\shape_predictor_68_face_landmarks.dat"
+            if not os.path.exists(predictor_path):
+                raise FileNotFoundError(f"Predictor file not found at: {predictor_path}")
             
-            self.face_cascade = cv2.CascadeClassifier(cascade_path)
-            if self.face_cascade.empty():
-                raise Exception("Error loading cascade classifier")
+            self.detector = dlib.get_frontal_face_detector()
+            self.predictor = dlib.shape_predictor(predictor_path)
         except Exception as e:
-            messagebox.showerror("Error", f"Error loading cascade classifier: {e}")
+            messagebox.showerror("Error", f"Error loading dlib models: {e}")
             self.root.destroy()
             return
 
-        # Load the classifier model
-        try:
-            classifier_path = r"C:\Users\Jerard\Documents\GitHub\Face_Shape-Hairstylist\tools\classifier.yml"
-            if not os.path.exists(classifier_path):
-                raise FileNotFoundError(f"Classifier file not found at: {classifier_path}")
-            
-            self.clf = cv2.face.LBPHFaceRecognizer_create()
-            self.clf.read(classifier_path)
-        except Exception as e:
-            messagebox.showerror("Error", f"Error loading classifier: {e}")
-            self.root.destroy()
-            return
-        
         # Variables
         self.is_running = False
         self.current_frame = None
-        
+
         # Create GUI elements
         self.create_widgets()
-        
+
     def init_camera(self):
         try:
-            self.cap = cv2.VideoCapture(0)  # Use default camera
+            self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened():
                 raise Exception("Could not open camera")
-            ret, frame = self.cap.read()
-            if not ret:
-                raise Exception("Could not read from camera")
-            print("Successfully connected to camera")
+            print("Camera initialized successfully")
         except Exception as e:
-            messagebox.showerror("Error", f"Camera initialization failed: {str(e)}")
+            messagebox.showerror("Error", f"Camera initialization failed: {e}")
             self.root.destroy()
 
     def create_widgets(self):
@@ -85,84 +69,79 @@ class FaceShapeRecognizer:
         self.stop_button = ttk.Button(self.control_frame, text="Stop", command=self.stop_video)
         self.stop_button.pack(side="left", padx=5)
 
-    def determine_face_shape(self, face_width, face_height, face_landmarks=None):
-        # Calculate basic ratio
-        ratio = face_height / face_width
+    def determine_face_shape(self, face_landmarks):
+        """
+        Determines face shape based on facial landmarks.
+        Returns: round, oval, or square
+        """
+        points = np.array([[face_landmarks.part(i).x, face_landmarks.part(i).y] 
+                        for i in range(68)])
         
-        # Add tolerance for measurement variations
-        tolerance = 0.1
+        # Key measurements
+        face_length = points[8][1] - points[19][1]  # Vertical length from chin to forehead
+        jaw_width = np.linalg.norm(points[3] - points[13])  # Width at jawline
+        cheekbone_width = np.linalg.norm(points[2] - points[14])  # Width at cheekbones
         
-        # Enhanced face shape determination logic
-        if ratio > 1.5:
-            return "Oblong"
-        elif 1.3 - tolerance <= ratio <= 1.5 + tolerance:
-            return "Oval"
-        elif 1.1 - tolerance <= ratio < 1.3 - tolerance:
-            return "Round"
-        elif ratio < 1.1:
+        # Calculate ratios
+        length_width_ratio = face_length / cheekbone_width
+        jaw_cheek_ratio = jaw_width / cheekbone_width
+
+        # Define thresholds
+        SQUARE_JAW_CHEEK_THRESHOLD = 0.95  # For square face, jaw width should be similar to cheekbone width
+        ROUND_LENGTH_WIDTH_THRESHOLD = 1.1  # For round face, length should be similar to width
+        
+        # Square face: Similar jaw and cheekbone width
+        if jaw_cheek_ratio >= SQUARE_JAW_CHEEK_THRESHOLD:
             return "Square"
+        
+        # Round face: Similar length and width, curved jawline
+        elif length_width_ratio <= ROUND_LENGTH_WIDTH_THRESHOLD:
+            return "Round"
+        
+        # Oval face: Length greater than width, cheekbones wider than jawline
         else:
-            return "Undefined"
+            return "Oval"
 
     def process_frame(self):
         if not self.is_running:
             return
 
-        try:
-            ret, frame = self.cap.read()
-            if not ret or frame is None:
-                print("Failed to grab frame")
-                self.root.after(10, self.process_frame)  # Retry after a short delay
-                return
+        ret, frame = self.cap.read()
+        if not ret or frame is None:
+            self.root.after(10, self.process_frame)
+            return
 
-            # Mirror the frame
-            frame = cv2.flip(frame, 1)
+        frame = cv2.flip(frame, 1)  # Mirror the frame
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            # Convert frame to grayscale
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Detect faces using dlib
+        faces = self.detector(gray)
+        for face in faces:
+            # Get landmarks
+            landmarks = self.predictor(gray, face)
 
-            # Detect faces
-            try:
-                faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.1, 
-                                                        minNeighbors=5,
-                                                        minSize=(30, 30))
-            except Exception as e:
-                print(f"Error in face detection: {e}")
-                self.root.after(10, self.process_frame)
-                return
+            # Calculate face shape
+            face_shape = self.determine_face_shape(landmarks)
 
-            for (x, y, w, h) in faces:
-                try:
-                    # Draw rectangle around face
-                    cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            # Draw the face bounding box and landmarks
+            cv2.rectangle(frame, (face.left(), face.top()), (face.right(), face.bottom()), (255, 0, 0), 2)
+            for i in range(68):
+                cv2.circle(frame, (landmarks.part(i).x, landmarks.part(i).y), 1, (0, 255, 0), -1)
 
-                    # Get region of interest
-                    roi_gray = gray[y:y+h, x:x+w]
+            # Display face shape
+            cv2.putText(frame, face_shape, (face.left(), face.top() - 10), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-                    # Calculate face shape
-                    face_shape = self.determine_face_shape(w, h)
+            # Update GUI label
+            self.info_label.config(text=f"Face Shape: {face_shape}")
 
-                    # Update info label in a thread-safe way
-                    self.info_label.config(text=f"Face Shape: {face_shape}")
+        # Convert frame for display
+        cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(cv2image)
+        imgtk = ImageTk.PhotoImage(image=img)
+        self.video_label.imgtk = imgtk
+        self.video_label.configure(image=imgtk)
 
-                    # Draw face shape text
-                    cv2.putText(frame, face_shape, (x, y-10), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
-                except Exception as e:
-                    print(f"Error processing detected face: {e}")
-                    continue
-
-            # Convert frame for display
-            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(cv2image)
-            imgtk = ImageTk.PhotoImage(image=img)
-            self.video_label.imgtk = imgtk
-            self.video_label.configure(image=imgtk)
-
-        except Exception as e:
-            print(f"Error in process_frame: {str(e)}")
-
-        # Schedule the next frame update
         self.root.after(10, self.process_frame)
 
     def start_video(self):
