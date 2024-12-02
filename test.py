@@ -17,7 +17,6 @@ class FaceShapeRecognizer:
         # Initialize variables first
         self.is_running = False
         self.current_frame = None
-
         self.message_shown = False
         
         # Create GUI elements before camera initialization
@@ -40,9 +39,25 @@ class FaceShapeRecognizer:
 
     def run(self):
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        # Start video processing after a short delay
-        self.root.after(100, self.start_video)
+        
+        # Start displaying camera feed without processing
+        self.display_camera_feed()
+        
         self.root.mainloop()
+
+    def display_camera_feed(self):
+        ret, frame = self.cap.read()
+        if ret:
+            frame = cv2.flip(frame, 1)  # Mirror the frame
+            cv2image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(cv2image)
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_label.imgtk = imgtk
+            self.video_label.configure(image=imgtk)
+        
+        # Continue updating camera feed
+        self.root.after(10, self.display_camera_feed)
+
 
     def init_camera(self):
         try:
@@ -57,7 +72,6 @@ class FaceShapeRecognizer:
             self.root.destroy()
 
     def create_widgets(self):
-        # Create main frame
         # Create main frame with custom background
         self.main_frame = ttk.Frame(self.root, style='Custom.TFrame')
         self.main_frame.pack(pady=10, padx=10, fill="both", expand=True)
@@ -273,4 +287,5 @@ class FaceShapeRecognizer:
 if __name__ == "__main__":
     app = FaceShapeRecognizer()
     app.run()
+    
     
