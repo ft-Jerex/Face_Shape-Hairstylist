@@ -89,12 +89,13 @@ class App:
         window.geometry(f'{width}x{height}+{x}+{y}')
 
     def open_start_window(self):
-        """Launch the app.py file in a new Python process."""
+        """Launch the app.py file in a new Python process and close current window."""
         try:
-            script_path = os.path.abspath(r"C:\Users\Jerard\Documents\GitHub\Face_Shape-Hairstylist\app.py")
+            script_path = os.path.abspath(r"app.py")
             if os.path.exists(script_path):
                 # Open the script in the same directory
                 subprocess.Popen([sys.executable, script_path], cwd=os.path.dirname(script_path))
+                self.root.destroy()  # Close the current window
             else:
                 tk.messagebox.showerror("Error", f"File not found: {script_path}")
         except Exception as e:

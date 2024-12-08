@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from PIL import Image, ImageTk
 import threading
+import subprocess
+import sys
 import dlib
 import numpy as np
 import os
@@ -14,11 +16,31 @@ class FaceShapeRecognizer:
         self.root.title("Face Shape Recognition")
         self.root.state('zoomed')
         
+        # Get screen dimensions
+        self.screen_width = self.root.winfo_screenwidth()
+        self.screen_height = self.root.winfo_screenheight()
+        
         # Initialize variables first
         self.is_running = False
         self.current_frame = None
-
         self.message_shown = False
+        self.current_shape = None
+        self.timer_started = False
+        self.timer_value = 10
+        self.timer_paused = False
+        self.elapsed_time = 0
+        
+        # Calculate dynamic sizes based on screen dimensions
+        self.hairstyle_img_size = min(int(self.screen_width * 0.15), int(self.screen_height * 0.2))
+        
+        # Set video size to maintain 4:3 aspect ratio
+        video_height = int(self.screen_height * 0.4)
+        video_width = int(video_height * 4/3)
+        self.video_size = (video_width, video_height)
+        
+        # Load hairstyle images with dynamic sizing
+        self.male_images = self.load_hairstyle_images("male")
+        self.female_images = self.load_hairstyle_images("female")
         
         # Create GUI elements before camera initialization
         self.create_widgets()
@@ -36,7 +58,25 @@ class FaceShapeRecognizer:
             messagebox.showerror("Error", f"Error loading dlib models: {e}")
             self.root.destroy()
             return
-        
+
+    def load_hairstyle_images(self, gender):
+        images = {}
+        shapes = ["Round", "Oval", "Square", "Diamond", "Heart"]
+        for shape in shapes:
+            shape_images = []
+            path = f"{gender}/{shape.lower()}"
+            if os.path.exists(path):
+                for img_file in os.listdir(path):
+                    if img_file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                        try:
+                            img = Image.open(os.path.join(path, img_file))
+                            img = img.resize((self.hairstyle_img_size, self.hairstyle_img_size), Image.Resampling.LANCZOS)
+                            photo = ImageTk.PhotoImage(img)
+                            shape_images.append(photo)
+                        except Exception as e:
+                            print(f"Error loading image {img_file}: {e}")
+            images[shape] = shape_images[:5]  # Take up to 5 images
+        return images
 
     def run(self):
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -57,57 +97,225 @@ class FaceShapeRecognizer:
             self.root.destroy()
 
     def create_widgets(self):
-        # Create main frame
-        # Create main frame with custom background
-        self.main_frame = ttk.Frame(self.root, style='Custom.TFrame')
-        self.main_frame.pack(pady=10, padx=10, fill="both", expand=True)
+        # Calculate dynamic padding and font sizes
+        side_padding = int(self.screen_width * 0.02)
+        title_font_size = int(min(self.screen_width, self.screen_height) * 0.03)
+        label_font_size = int(min(self.screen_width, self.screen_height) * 0.013)
+        button_font_size = int(min(self.screen_width, self.screen_height) * 0.012)
         
-        # Configure custom style for frame and buttons
+        # Create main container
+        container = ttk.Frame(self.root, style='Custom.TFrame')
+        container.pack(fill="both", expand=True)
+
+        # Create left frame for male images
+        left_frame = ttk.Frame(container, style='Custom.TFrame')
+        left_frame.pack(side="left", padx=side_padding, fill="y")
+
+        # Create center frame
+        center_frame = ttk.Frame(container, style='Custom.TFrame')
+        center_frame.pack(side="left", expand=True, fill="both", padx=10)
+
+        # Create right frame for female images
+        right_frame = ttk.Frame(container, style='Custom.TFrame')
+        right_frame.pack(side="right", padx=side_padding, fill="y")
+
+        # Configure custom style with dynamic sizes
         style = ttk.Style()
-        style.configure('Custom.TFrame', background='#FFB5C1')
-        style.configure('Custom.TButton', 
-                        background='#FFB5C1',  
-                        foreground='#000000',  
-                        font=('Arial', 10, 'bold'))
-                        
-        # Create video frame
-        self.video_label = ttk.Label(self.main_frame)
-        self.video_label.pack(pady=10)
+        style.configure('Custom.TFrame', 
+                        background='#FFB5C1', 
+                        foreground='#000000')
+        style.configure('Custom.TButton',
+                        foreground='#000000',
+                        background='#FFB5C1',
+                        font=('Arial', button_font_size, 'bold'))
+        style.configure('Custom.TLabel',
+                        background='#FFB5C1',
+                        foreground='#000000')
+
+        # Add MALE label with dynamic font size
+        male_label = tk.Label(left_frame, 
+                            text="MALE", 
+                            font=("Lucida Calligraphy", title_font_size, "bold"),
+                            fg="#8B0000",
+                            bg='#FFB5C1',
+                            justify="center",
+                            anchor="center")
+        male_label.pack(pady=int(self.screen_height * 0.03), padx=110)
+
+        # Create image grid for male side
+        self.male_image_labels = []
+        placeholder_frame_left = ttk.Frame(left_frame, style='Custom.TFrame')
+        placeholder_frame_left.pack(side="top", fill="both", expand=True)
         
-        # Create info label
-        self.info_label = ttk.Label(self.main_frame, 
-                                    text="Face Shape: Unknown", 
-                                    font=('Arial', 14), 
-                                    style='Custom.TFrame')
+        # First row - 2 images
+        row1_frame = ttk.Frame(placeholder_frame_left, style='Custom.TFrame')
+        row1_frame.pack(pady=5)
+        for i in range(2):
+            label = ttk.Label(row1_frame, style='Custom.TLabel')
+            label.pack(side="left", padx=2)
+            self.male_image_labels.append(label)
+            
+        # Second row - 2 images
+        row2_frame = ttk.Frame(placeholder_frame_left, style='Custom.TFrame')
+        row2_frame.pack(pady=5)
+        for i in range(2):
+            label = ttk.Label(row2_frame, style='Custom.TLabel')
+            label.pack(side="left", padx=2)
+            self.male_image_labels.append(label)
+            
+        # Third row - 1 image
+        row3_frame = ttk.Frame(placeholder_frame_left, style='Custom.TFrame')
+        row3_frame.pack(pady=2)
+        label = ttk.Label(row3_frame, style='Custom.TLabel')
+        label.pack()
+        self.male_image_labels.append(label)
+
+        # Add FEMALE label with dynamic font size
+        female_label = tk.Label(right_frame, 
+                            text="FEMALE", 
+                            font=("Lucida Calligraphy", title_font_size, "bold"),
+                            fg="#8B0000",
+                            bg='#FFB5C1',
+                            justify="center",
+                            anchor="center")
+        female_label.pack(pady=int(self.screen_height * 0.03), padx=110)
+
+        # Create image grid for female side
+        self.female_image_labels = []
+        placeholder_frame_right = ttk.Frame(right_frame, style='Custom.TFrame')
+        placeholder_frame_right.pack(side="top", fill="both", expand=True)
+        
+        # First row - 2 images
+        row1_frame = ttk.Frame(placeholder_frame_right, style='Custom.TFrame')
+        row1_frame.pack(pady=5)
+        for i in range(2):
+            label = ttk.Label(row1_frame, style='Custom.TLabel')
+            label.pack(side="left", padx=2)
+            self.female_image_labels.append(label)
+            
+        # Second row - 2 images
+        row2_frame = ttk.Frame(placeholder_frame_right, style='Custom.TFrame')
+        row2_frame.pack(pady=2)
+        for i in range(2):
+            label = ttk.Label(row2_frame, style='Custom.TLabel')
+            label.pack(side="left", padx=2)
+            self.female_image_labels.append(label)
+            
+        # Third row - 1 image
+        row3_frame = ttk.Frame(placeholder_frame_right, style='Custom.TFrame')
+        row3_frame.pack(pady=5)
+        label = ttk.Label(row3_frame, style='Custom.TLabel')
+        label.pack()
+        self.female_image_labels.append(label)
+
+        # Title Label with dynamic font size
+        title_label = tk.Label(
+            center_frame,
+            text="Face Shape\nHairstylist",
+            font=("Lucida Calligraphy", title_font_size, "bold"),
+            fg="#8B0000",
+            bg="#FFB5C1",
+        )
+        title_label.pack(pady=int(self.screen_height * 0.03))
+
+        # Create video frame in center
+        self.video_label = ttk.Label(center_frame)
+        self.video_label.pack(pady=int(self.screen_height * 0.01))
+        
+        # Create timer label with dynamic font size
+        self.timer_label = ttk.Label(center_frame,
+                                   text="",
+                                   font=('Lucida Calligraphy', label_font_size),
+                                   style='Custom.TLabel')
+        self.timer_label.pack(pady=5)
+        
+        # Create info label with dynamic font size
+        self.info_label = ttk.Label(center_frame,
+                                    text="Face Shape: Unknown",
+                                    font=('Lucida Calligraphy', label_font_size),
+                                    style='Custom.TLabel')
         self.info_label.pack(pady=10)
         
         # Create control buttons frame
-        self.control_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
-        self.control_frame.pack(pady=10)
+        self.control_frame = ttk.Frame(center_frame, style='Custom.TFrame')
+        self.control_frame.pack(pady=int(self.screen_height * 0.01))
         
-        # Start button with custom style
-        self.start_button = ttk.Button(self.control_frame, 
-                                    text="Start", 
+        # Control buttons with dynamic padding
+        button_padding = int(self.screen_width * 0.005)
+        
+        # Start button
+        self.start_button = ttk.Button(self.control_frame,
+                                    text="Start",
                                     command=self.start_video,
                                     style='Custom.TButton')
-        self.start_button.pack(side="left", padx=5)
+        self.start_button.pack(side="left", padx=button_padding)
         
-        # Stop button with custom style
-        self.stop_button = ttk.Button(self.control_frame, 
-                                    text="Stop", 
+        # Stop button
+        self.stop_button = ttk.Button(self.control_frame,
+                                    text="Stop",
                                     command=self.stop_video,
                                     style='Custom.TButton')
-        self.stop_button.pack(side="left", padx=5)
+        self.stop_button.pack(side="left", padx=button_padding)
         
-        # Restart button with custom style
-        self.restart_button = ttk.Button(self.control_frame, 
-                                        text="Restart Analysis", 
+        # Restart button
+        self.restart_button = ttk.Button(self.control_frame,
+                                        text="Restart Analysis",
                                         command=self.restart_analysis,
                                         style='Custom.TButton')
-        self.restart_button.pack(side="left", padx=5)
+        self.restart_button.pack(side="left", padx=button_padding)
+
+        # Back to Main Menu button
+        self.back_button = ttk.Button(self.control_frame,
+                                    text="Back to Main Menu",
+                                    command=self.back_to_main_menu,
+                                    style='Custom.TButton')
+        self.back_button.pack(side="left", padx=button_padding)
+
+        # Create result label with dynamic font size and wraplength
+        self.result_label = ttk.Label(center_frame,
+                                    text="",
+                                    font=('Lucida Calligraphy', label_font_size),
+                                    wraplength=int(self.screen_width * 0.4),
+                                    justify="center",
+                                    style='Custom.TLabel')
+        self.result_label.pack(pady=10)
         
         # Initially disable restart button
         self.restart_button.config(state=tk.DISABLED)
+
+    def back_to_main_menu(self):
+        """Launch the start.py file in a new Python process."""
+        try:
+            script_path = os.path.abspath(r"start.py")
+            if os.path.exists(script_path):
+                # Open the script in the same directory
+                subprocess.Popen([sys.executable, script_path], cwd=os.path.dirname(script_path))
+                self.on_closing()  # Close current window after launching main menu
+            else:
+                messagebox.showerror("Error", f"File not found: {script_path}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open start window: {e}")
+
+    def update_hairstyle_images(self, face_shape):
+        if face_shape != self.current_shape:
+            self.current_shape = face_shape
+            # Update male images
+            male_images = self.male_images.get(face_shape, [])
+            for i, label in enumerate(self.male_image_labels):
+                if i < len(male_images):
+                    label.configure(image=male_images[i])
+                    label._image = male_images[i]  # Keep a reference
+                else:
+                    label.configure(image='')
+
+            # Update female images
+            female_images = self.female_images.get(face_shape, [])
+            for i, label in enumerate(self.female_image_labels):
+                if i < len(female_images):
+                    label.configure(image=female_images[i])
+                    label._image = female_images[i]  # Keep a reference
+                else:
+                    label.configure(image='')
 
     def restart_analysis(self):
         # Reset all analysis-related attributes
@@ -116,11 +324,22 @@ class FaceShapeRecognizer:
         if hasattr(self, 'shape_start_time'):
             del self.shape_start_time
         
-        # Reset message flag
+        # Reset message flag and current shape
         self.message_shown = False
+        self.current_shape = None
+        self.timer_started = False
+        self.timer_value = 10
+        self.timer_paused = False
+        self.elapsed_time = 0
         
-        # Reset info label
+        # Clear all image labels
+        for label in self.male_image_labels + self.female_image_labels:
+            label.configure(image='')
+        
+        # Reset info label and result label
         self.info_label.config(text="Face Shape: Unknown")
+        self.result_label.config(text="")
+        self.timer_label.config(text="")
         
         # Disable restart button
         self.restart_button.config(state=tk.DISABLED)
@@ -152,6 +371,8 @@ class FaceShapeRecognizer:
         if not hasattr(self, 'shape_history'):
             self.shape_history = []
             self.shape_start_time = time.time()
+            self.timer_started = True
+            self.elapsed_time = 0
 
         # Define thresholds with more precise measurements
         if length_width_ratio <= 1.1 and jaw_cheek_ratio > 0.9:
@@ -169,22 +390,33 @@ class FaceShapeRecognizer:
         self.shape_history.append(shape)
         
         # Check if we have consistent readings for 3 seconds
-        elapsed_time = time.time() - self.shape_start_time
+        if not self.timer_paused:
+            self.elapsed_time = time.time() - self.shape_start_time
         time_threshold = 10.0
-        if elapsed_time >= time_threshold:
+        
+        # Update timer display
+        if self.timer_started and self.elapsed_time < time_threshold:
+            remaining_time = max(0, int(time_threshold - self.elapsed_time))
+            self.timer_label.config(text=f"Analysis in progress... {remaining_time}s")
+        
+        if self.elapsed_time >= time_threshold:
             # Get most common shape in history
             from collections import Counter
             most_common_shape = Counter(self.shape_history).most_common(1)[0][0]
             
-            # Show message box if we haven't shown it yet
+            # Update result label if we haven't shown it yet
             if not getattr(self, 'message_shown', False):
                 self.message_shown = True
-                message = f"Face shape analysis complete!\nYour face shape is: {most_common_shape}\n\n"
-                message += self.get_face_shape_description(most_common_shape)
-                messagebox.showinfo("Face Shape Result", message)
+                self.timer_label.config(text="Analysis complete!")
+                result_text = f"Face Shape Analysis Complete!\nYour face shape is: {most_common_shape}\n\n"
+                result_text += self.get_face_shape_description(most_common_shape)
+                self.result_label.config(text=result_text)
                 
                 # Enable restart button after analysis is complete
                 self.restart_button.config(state=tk.NORMAL)
+                
+                # Update hairstyle images
+                self.update_hairstyle_images(most_common_shape)
             
             return most_common_shape
         
@@ -213,6 +445,10 @@ class FaceShapeRecognizer:
             return
 
         frame = cv2.flip(frame, 1)  # Mirror the frame
+        
+        # Resize frame to fit screen while maintaining aspect ratio
+        frame = cv2.resize(frame, self.video_size)
+        
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # Detect faces using dlib
@@ -230,7 +466,7 @@ class FaceShapeRecognizer:
                 cv2.circle(frame, (landmarks.part(i).x, landmarks.part(i).y), 1, (0, 255, 0), -1)
 
             # Display face shape
-            cv2.putText(frame, face_shape, (face.left(), face.top() - 10), 
+            cv2.putText(frame, face_shape, (face.left(), face.top() - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
             # Update GUI label
@@ -245,16 +481,20 @@ class FaceShapeRecognizer:
 
         self.root.after(10, self.process_frame)
 
-    
     def start_video(self):
         if not self.is_running:
             self.info_label.config(text="Initializing camera...")
             self.is_running = True
+            self.timer_paused = False
+            if hasattr(self, 'shape_start_time'):
+                # Resume timer from where it was paused
+                self.shape_start_time = time.time() - self.elapsed_time
             self.video_thread = threading.Thread(target=self.process_frame)
             self.video_thread.start()
 
     def stop_video(self):
         self.is_running = False
+        self.timer_paused = True
         if hasattr(self, 'video_thread'):
             self.video_thread.join()
 
@@ -273,4 +513,3 @@ class FaceShapeRecognizer:
 if __name__ == "__main__":
     app = FaceShapeRecognizer()
     app.run()
-    

@@ -95,6 +95,26 @@ class FaceShapeRecognizer:
                                     style='Custom.TFrame')
         self.info_label.pack(pady=10)
         
+        # Create image grid frame
+        self.image_grid_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
+        self.image_grid_frame.pack(pady=10)
+        
+        # Create 10 image slots (5 on left, 5 on right)
+        self.left_image_labels = []
+        self.right_image_labels = []
+
+        # Left side image slots
+        for _ in range(5):
+            label = ttk.Label(self.image_grid_frame, style='Custom.TFrame')
+            label.pack(side=tk.LEFT, padx=5)
+            self.left_image_labels.append(label)
+        
+        # Right side image slots
+        for _ in range(5):
+            label = ttk.Label(self.image_grid_frame, style='Custom.TFrame')
+            label.pack(side=tk.RIGHT, padx=5)
+            self.right_image_labels.append(label)
+        
         # Create control buttons frame
         self.control_frame = ttk.Frame(self.main_frame, style='Custom.TFrame')
         self.control_frame.pack(pady=10)
@@ -122,6 +142,85 @@ class FaceShapeRecognizer:
         
         # Initially disable restart button
         self.restart_button.config(state=tk.DISABLED)
+        
+        # Load face shape images
+        self.load_face_shape_images()
+
+    def load_face_shape_images(self):
+        # Define face shape image paths (replace with your actual image paths)
+        self.face_shape_images = {
+            "Round": [
+            "Male/Round/Quiff.jpg", 
+            "Male/Round/Undercut.jpg", 
+            "Male/Round/SidePart.webp", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Warrior.webp"
+            ],
+            "Oval": [
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg"
+            ],
+            "Square": [
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg"
+            ],
+            "Diamond": [
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg",  
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg",
+            "Male/Round/Slickback.jpg"
+            ],
+            "Heart": [
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg", 
+            "Male/Round/Slickback.jpg"
+            ]
+        }
+
+        self.prepared_images = {}
+        for shape, image_paths in self.face_shape_images.items():
+            shape_images = []
+            for path in image_paths:
+                try:
+                    img = Image.open(path)
+                    img = img.resize((100, 100), Image.LANCZOS)  # Resize to 100x100
+                    photo = ImageTk.PhotoImage(img)
+                    shape_images.append(photo)
+                except Exception as e:
+                    print(f"Error loading image for {shape}: {e}")
+                    # Use a placeholder if image fails to load
+                    shape_images.append(None)
+            self.prepared_images[shape] = shape_images
+
+    def display_face_shape_images(self, face_shape):
+        # Clear existing images
+        for label in self.left_image_labels + self.right_image_labels:
+            label.configure(image='')
+        
+        # If we have prepared images for this face shape
+        if face_shape in self.prepared_images:
+            images = self.prepared_images[face_shape]
+            
+            # Display on left side
+            for i, label in enumerate(self.left_image_labels):
+                if i < len(images) and images[i]:
+                    label.configure(image=images[i])
+                    label.image = images[i]
+            
+            # Display on right side (can be same or different images)
+            for i, label in enumerate(self.right_image_labels):
+                if i < len(images) and images[i]:
+                    label.configure(image=images[i])
+                    label.image = images[i]
 
     def restart_analysis(self):
         # Reset all analysis-related attributes
@@ -196,6 +295,9 @@ class FaceShapeRecognizer:
                 message = f"Face shape analysis complete!\nYour face shape is: {most_common_shape}\n\n"
                 message += self.get_face_shape_description(most_common_shape)
                 messagebox.showinfo("Face Shape Result", message)
+                
+                # Display images for the determined face shape
+                self.display_face_shape_images(most_common_shape)
                 
                 # Enable restart button after analysis is complete
                 self.restart_button.config(state=tk.NORMAL)
