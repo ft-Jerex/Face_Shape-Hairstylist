@@ -18,21 +18,21 @@ class App:
         title_label = tk.Label(
             self.root,
             text="Face Shape\nHairstylist",
-            font=("Lucida Calligraphy", 24, "bold"),
+            font=("Cambria", 28, "bold"),
             fg="#8B0000",  # Dark red color
-            bg="#FFB5C1",
+            bg=self.root.cget('bg')  # Use parent's background color
         )
         title_label.pack(pady=50)
 
         # Main Menu Button
-        main_menu_frame = tk.Frame(self.root, bg="#FFB5C1")
+        main_menu_frame = tk.Frame(self.root)
         main_menu_frame.pack(pady=10)
 
         # Main Menu Label
         main_menu_label = tk.Label(
             main_menu_frame,
             text="Main Menu",
-            font=("Lucida Calligraphy", 18, "bold"),
+            font=("Cambria", 22, "bold"),
             fg="#FFFFFF",
             bg="#68102C",
             padx=40,
@@ -47,38 +47,44 @@ class App:
         # Start Button
         start_button = tk.Button(
             button_frame,
-            text="| Start |",
-            font=("Lucida Calligraphy", 14),
+            text=" Start ",
+            font=("Cambria", 20),
             bg="#FFB5C1",
+            activebackground="#FF9FAD",  # Slightly darker pink on hover
             fg="#8B0000",
+            activeforeground="#4A0000",
             relief="flat",
             command=self.open_start_window,
         )
-        start_button.pack(pady=10)
+        start_button.pack(pady=7)
 
         # Help Button
         help_button = tk.Button(
             button_frame,
-            text="| Help |",
-            font=("Lucida Calligraphy", 14),
+            text=" Help ",
+            font=("Cambria", 17),
             bg="#FFB5C1",
+            activebackground="#FF9FAD",  # Slightly darker pink on hover
             fg="#8B0000",
+            activeforeground="#4A0000",
             relief="flat",
             command=self.open_help_window,
         )
-        help_button.pack(pady=10)
+        help_button.pack(pady=7)
 
         # Exit Button
         exit_button = tk.Button(
             button_frame,
-            text="| Exit |",
-            font=("Lucida Calligraphy", 14),
+            text=" Exit ",
+            font=("Cambria", 14),
             bg="#FFB5C1",
+            activebackground="#FF9FAD",  # Slightly darker pink on hover
             fg="#8B0000",
+            activeforeground="#4A0000",
             relief="flat",
             command=self.exit_app,
         )
-        exit_button.pack(pady=10)
+        exit_button.pack(pady=7)
 
     def center_window(self, window, width, height):
         """Centers a window on the screen."""
@@ -106,15 +112,15 @@ class App:
         self.root.withdraw()  # Hide the main window
         help_window = tk.Toplevel(self.root)
         help_window.title("Help Window")
-        help_window.geometry("300x200")
-        self.center_window(help_window, 300, 200)
+        help_window.geometry("500x450")
+        self.center_window(help_window, 500, 450)
         help_window.configure(bg="#FFC3C3")
         help_window.resizable(False, False)
 
         tk.Label(
             help_window,
-            text="Help: Use 'Start' to begin\nand 'Exit' to close the app.",
-            font=("Arial", 14),
+            text="This an app that helps you find the \nbest hairstyle for your \nface shape. \n\nHelp: Use 'Start' to begin\nand 'Exit' to close the app.\n\n\nNote: The images provided are predefined\n\nDeveloped by:\n Jerard J. Regalado\nStephanie Mei A. Bobon",
+            font=("Cambria", 14),
             bg="#FFC3C3",
             fg="#8B0000",
             justify="center",
@@ -126,8 +132,10 @@ class App:
             text="Close Help",
             font=("Arial", 12),
             bg="#FFC3C3",
+            activebackground="#FFB1B1",  # Slightly darker pink on hover
             fg="#8B0000",
-            relief="flat",
+            activeforeground="#4A0000",
+            relief="groove",
             command=lambda: self.close_window(help_window),
         )
         close_button.pack(pady=10)

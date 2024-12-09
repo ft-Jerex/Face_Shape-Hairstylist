@@ -100,7 +100,7 @@ class FaceShapeRecognizer:
         # Calculate dynamic padding and font sizes
         side_padding = int(self.screen_width * 0.02)
         title_font_size = int(min(self.screen_width, self.screen_height) * 0.03)
-        label_font_size = int(min(self.screen_width, self.screen_height) * 0.013)
+        label_font_size = int(min(self.screen_width, self.screen_height) * 0.017)
         button_font_size = int(min(self.screen_width, self.screen_height) * 0.012)
         
         # Create main container
@@ -125,9 +125,9 @@ class FaceShapeRecognizer:
                         background='#FFB5C1', 
                         foreground='#000000')
         style.configure('Custom.TButton',
-                        foreground='#000000',
                         background='#FFB5C1',
-                        font=('Arial', button_font_size, 'bold'))
+                        foreground='#000000',
+                        font=('Cambria', button_font_size, 'bold'))
         style.configure('Custom.TLabel',
                         background='#FFB5C1',
                         foreground='#000000')
@@ -135,7 +135,7 @@ class FaceShapeRecognizer:
         # Add MALE label with dynamic font size
         male_label = tk.Label(left_frame, 
                             text="MALE", 
-                            font=("Lucida Calligraphy", title_font_size, "bold"),
+                            font=("Cambria", title_font_size, "bold"),
                             fg="#8B0000",
                             bg='#FFB5C1',
                             justify="center",
@@ -173,7 +173,7 @@ class FaceShapeRecognizer:
         # Add FEMALE label with dynamic font size
         female_label = tk.Label(right_frame, 
                             text="FEMALE", 
-                            font=("Lucida Calligraphy", title_font_size, "bold"),
+                            font=("Cambria", title_font_size, "bold"),
                             fg="#8B0000",
                             bg='#FFB5C1',
                             justify="center",
@@ -212,11 +212,11 @@ class FaceShapeRecognizer:
         title_label = tk.Label(
             center_frame,
             text="Face Shape\nHairstylist",
-            font=("Lucida Calligraphy", title_font_size, "bold"),
+            font=("Cambria", 32, "bold"),
             fg="#8B0000",
             bg="#FFB5C1",
         )
-        title_label.pack(pady=int(self.screen_height * 0.03))
+        title_label.pack(pady=(20, 10))
 
         # Create video frame in center
         self.video_label = ttk.Label(center_frame)
@@ -225,56 +225,72 @@ class FaceShapeRecognizer:
         # Create timer label with dynamic font size
         self.timer_label = ttk.Label(center_frame,
                                    text="",
-                                   font=('Lucida Calligraphy', label_font_size),
+                                   font=('Cambria', label_font_size),
                                    style='Custom.TLabel')
         self.timer_label.pack(pady=5)
         
         # Create info label with dynamic font size
         self.info_label = ttk.Label(center_frame,
                                     text="Face Shape: Unknown",
-                                    font=('Lucida Calligraphy', label_font_size),
+                                    font=('Cambria', label_font_size),
                                     style='Custom.TLabel')
         self.info_label.pack(pady=10)
         
         # Create control buttons frame
-        self.control_frame = ttk.Frame(center_frame, style='Custom.TFrame')
+        self.control_frame = ttk.Frame(center_frame, style="Custom.TFrame")
         self.control_frame.pack(pady=int(self.screen_height * 0.01))
         
         # Control buttons with dynamic padding
         button_padding = int(self.screen_width * 0.005)
         
         # Start button
-        self.start_button = ttk.Button(self.control_frame,
-                                    text="Start",
+        self.start_button = tk.Button(self.control_frame,
+                                    text="▶",  # Play icon
                                     command=self.start_video,
-                                    style='Custom.TButton')
+                                    bg="#90EE90",  # Light green
+                                    activebackground="#32CD32",  # Darker green on hover
+                                    font=("Arial", 14),  # Larger font for icon
+                                    relief="groove"
+                                    )
         self.start_button.pack(side="left", padx=button_padding)
         
         # Stop button
-        self.stop_button = ttk.Button(self.control_frame,
-                                    text="Stop",
+        self.stop_button = tk.Button(self.control_frame,
+                                    text="⏸",  # Pause icon
                                     command=self.stop_video,
-                                    style='Custom.TButton')
+                                    bg="red",  # Light red
+                                    activebackground="#DC143C",  # Darker red on hover
+                                    font=("Arial", 14),  # Larger font for icon
+                                    relief="groove"
+                                    )
         self.stop_button.pack(side="left", padx=button_padding)
         
         # Restart button
-        self.restart_button = ttk.Button(self.control_frame,
-                                        text="Restart Analysis",
+        self.restart_button = tk.Button(self.control_frame,
+                                        text="↻",  # Repeat/restart icon
                                         command=self.restart_analysis,
-                                        style='Custom.TButton')
+                                        bg="#FFB347",  # Light orange
+                                        activebackground="#FF8C00",  # Darker orange on hover
+                                        font=("Arial", 14),  # Larger font for icon
+                                        relief="groove"
+                                        )
         self.restart_button.pack(side="left", padx=button_padding)
 
         # Back to Main Menu button
-        self.back_button = ttk.Button(self.control_frame,
-                                    text="Back to Main Menu",
+        self.back_button = tk.Button(self.control_frame,
+                                    text="⌂",  # Home icon
                                     command=self.back_to_main_menu,
-                                    style='Custom.TButton')
+                                    bg="#87CEEB",  # Light blue
+                                    activebackground="#4169E1",  # Darker blue on hover
+                                    font=("Arial", 14),  # Larger font for icon
+                                    relief="groove"
+                                    )
         self.back_button.pack(side="left", padx=button_padding)
 
         # Create result label with dynamic font size and wraplength
         self.result_label = ttk.Label(center_frame,
                                     text="",
-                                    font=('Lucida Calligraphy', label_font_size),
+                                    font=('Cambria', label_font_size),
                                     wraplength=int(self.screen_width * 0.4),
                                     justify="center",
                                     style='Custom.TLabel')
