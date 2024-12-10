@@ -7,6 +7,7 @@ import subprocess
 import sys
 import dlib
 import numpy as np
+import math
 import os
 import time
 
@@ -365,47 +366,107 @@ class FaceShapeRecognizer:
 
     def determine_face_shape(self, face_landmarks):
         """
-        Enhanced face shape detection including Round, Oval, Square, Diamond, and Heart shapes
+        Advanced face shape detection using comprehensive landmark measurements
+        
+        Args:
+            face_landmarks (dlib.full_object_detection): Facial landmarks from dlib
+        
+        Returns:
+            str: Detected face shape with high confidence
         """
-        points = np.array([[face_landmarks.part(i).x, face_landmarks.part(i).y] 
-                        for i in range(68)])
+        # Extract precise landmark coordinates
+        points = np.array([
+            [face_landmarks.part(i).x, face_landmarks.part(i).y] 
+            for i in range(68)
+        ])
         
-        # Key measurements
-        face_length = points[8][1] - points[19][1]  # Chin to forehead
-        jaw_width = np.linalg.norm(points[3] - points[13])  # Width at jawline
-        cheekbone_width = np.linalg.norm(points[2] - points[14])  # Width at cheekbones
-        forehead_width = np.linalg.norm(points[17] - points[26])  # Width at forehead
-        chin_to_cheekbone = points[8][1] - points[2][1]  # Chin to cheekbone height
+        # Advanced measurement points
+        # Forehead points
+        forehead_left = points[17]
+        forehead_right = points[26]
         
-        # Calculate ratios
-        length_width_ratio = face_length / cheekbone_width
-        jaw_cheek_ratio = jaw_width / cheekbone_width
-        forehead_jaw_ratio = forehead_width / jaw_width
-        chin_angle = np.arctan2(points[8][1] - points[7][1], points[8][0] - points[7][0])
-
-        # Add timing verification
+        # Cheekbone points
+        cheekbone_left = points[2]
+        cheekbone_right = points[14]
+        
+        # Jawline points
+        jaw_left = points[5]
+        jaw_right = points[11]
+        jaw_bottom = points[8]
+        
+        # Precise measurements
+        forehead_width = np.linalg.norm(forehead_left - forehead_right)
+        cheekbone_width = np.linalg.norm(cheekbone_left - cheekbone_right)
+        jaw_width = np.linalg.norm(jaw_left - jaw_right)
+        
+        # Face length calculations
+        face_length = np.linalg.norm(points[19] - points[8])  # From forehead to chin
+        
+        # Detailed angle calculations
+        def calculate_angle(p1, p2, p3):
+            """Calculate angle between three points"""
+            ba = p1 - p2
+            bc = p3 - p2
+            cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+            angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
+            return np.degrees(angle)
+        
+        # Jaw angle calculation
+        jaw_angle_left = calculate_angle(jaw_left, jaw_bottom, cheekbone_left)
+        jaw_angle_right = calculate_angle(jaw_right, jaw_bottom, cheekbone_right)
+        avg_jaw_angle = (jaw_angle_left + jaw_angle_right) / 2
+        
+        # Advanced ratio calculations
+        ratios = {
+            'length_to_width': face_length / cheekbone_width,
+            'forehead_to_jaw': forehead_width / jaw_width,
+            'cheekbone_to_jaw': cheekbone_width / jaw_width,
+            'face_aspect_ratio': face_length / (forehead_width + jaw_width)
+        }
+        
+        # Enhanced face shape detection logic
+        def classify_face_shape():
+            # Comprehensive classification criteria
+            if (ratios['length_to_width'] <= 1.2 and 
+                ratios['cheekbone_to_jaw'] >= 0.9 and 
+                avg_jaw_angle < 70):
+                return "Round"
+            
+            elif (ratios['length_to_width'] >= 1.3 and 
+                  ratios['cheekbone_to_jaw'] >= 0.8 and 
+                  ratios['forehead_to_jaw'] > 1.1):
+                return "Oval"
+            
+            elif (forehead_width > cheekbone_width and 
+                  cheekbone_width > jaw_width and 
+                  avg_jaw_angle > 80):
+                return "Heart"
+            
+            elif (math.isclose(forehead_width, jaw_width, rel_tol=0.1) and 
+                  avg_jaw_angle > 75):
+                return "Square"
+            
+            elif (cheekbone_width > forehead_width and 
+                  cheekbone_width > jaw_width and 
+                  ratios['length_to_width'] > 1.2):
+                return "Diamond"
+            
+            else:
+                return "Cannot determine"
+        
+        # Get initial shape classification
+        shape = classify_face_shape()
+        
+        # Initialize shape history if not exists
         if not hasattr(self, 'shape_history'):
             self.shape_history = []
             self.shape_start_time = time.time()
             self.timer_started = True
-            self.elapsed_time = 0
-
-        # Define thresholds with more precise measurements
-        if length_width_ratio <= 1.1 and jaw_cheek_ratio > 0.9:
-            shape = "Round"
-        elif jaw_cheek_ratio < 0.8 and forehead_jaw_ratio < 0.9:
-            shape = "Heart"
-        elif jaw_cheek_ratio > 0.9 and length_width_ratio > 1.2:
-            shape = "Square"
-        elif cheekbone_width > jaw_width and cheekbone_width > forehead_width:
-            shape = "Diamond"
-        else:
-            shape = "Oval"
 
         # Store shape in history
         self.shape_history.append(shape)
         
-        # Check if we have consistent readings for 3 seconds
+        # Check if we have consistent readings
         if not self.timer_paused:
             self.elapsed_time = time.time() - self.shape_start_time
         time_threshold = 10.0
@@ -416,40 +477,46 @@ class FaceShapeRecognizer:
             self.timer_label.config(text=f"Analysis in progress... {remaining_time}s")
         
         if self.elapsed_time >= time_threshold:
-            # Get most common shape in history
+            # Get most common shape in history with higher threshold
             from collections import Counter
-            most_common_shape = Counter(self.shape_history).most_common(1)[0][0]
+            shape_counts = Counter(self.shape_history)
+            most_common = shape_counts.most_common(1)[0]
+            most_common_shape = most_common[0]
+            confidence = most_common[1] / len(self.shape_history)
             
-            # Update result label if we haven't shown it yet
-            if not getattr(self, 'message_shown', False):
+            # Only show result if confidence is high enough
+            if confidence > 0.6 and not getattr(self, 'message_shown', False):
                 self.message_shown = True
                 self.timer_label.config(text="Analysis complete!")
                 result_text = f"Face Shape Analysis Complete!\nYour face shape is: {most_common_shape}\n\n"
                 result_text += self.get_face_shape_description(most_common_shape)
                 self.result_label.config(text=result_text)
-                
-                # Enable restart button after analysis is complete
                 self.restart_button.config(state=tk.NORMAL)
-                
-                # Update hairstyle images
                 self.update_hairstyle_images(most_common_shape)
             
             return most_common_shape
         
         return shape
-    
-    def get_face_shape_description(self, shape):
+    def get_face_shape_description(self, face_shape):
         """
-        Returns detailed description for each face shape
+        Provides a detailed description for each face shape
+        
+        Args:
+            face_shape (str): Detected face shape
+        
+        Returns:
+            str: Detailed description of the face shape
         """
         descriptions = {
-            "Round": "Characterized by soft curves and similar face width and length. Best suited for angular hairstyles to add definition.",
-            "Oval": "Considered the ideal face shape with balanced proportions. Suits most hairstyles and facial features.",
-            "Square": "Strong jaw and angular features. Characterized by a wide hairline and jawline of similar width.",
-            "Diamond": "Wide cheekbones with narrow forehead and jawline. Features dramatic angles and defined cheekbones.",
-            "Heart": "Wider forehead and cheekbones with a narrow, pointed chin. Often considered a very feminine face shape."
+            "Round": "A face shape where the width and length are nearly equal, characterized by soft, rounded contours and gentle curves. The cheeks are typically full, and the jawline appears less defined, creating a harmonious, youthful appearance.",
+            "Oval": "Considered the most versatile and balanced face shape, featuring a forehead slightly wider than the chin, with gently rounded edges. The face appears longer than it is wide, creating an elegant profile that complements most hairstyles.",
+            "Heart": "Defined by a broader forehead and cheekbones that taper down to a delicate, pointed chin, mimicking the shape of a heart. This distinctive silhouette is marked by prominent cheekbones and a narrow jawline.",
+            "Square": "A bold face shape characterized by a strong, angular jawline and nearly uniform width across the forehead, cheekbones, and jaw. Sharp, defined lines create a sense of structure and symmetry, giving the face a powerful appearance.",
+            "Diamond": "A unique face shape featuring narrow, more angular forehead and jawline with dramatically prominent, wide cheekbones. The cheekbones are the widest part of the face, creating a refined look that draws attention to the facial features.",
+            "Cannot determine": "Your facial structure presents a unique combination of characteristics that makes a standard face shape classification challenging. This complexity reflects the individual beauty of your specific facial anatomy."
         }
-        return descriptions.get(shape, "")
+        
+        return descriptions.get(face_shape, "No description available.")
 
     def process_frame(self):
         if not self.is_running:
